@@ -10,7 +10,7 @@
 ; Hardware: 6 displays, 3 pushbuttons, 12 LEDs, transistores NPN
 ;
 ; Creado: 16 mar, 2021
-; Última modificación: 2 abr, 2021
+; Última modificación: 5 abr, 2021
 ;
 ; configuration word 1
 
@@ -2481,9 +2481,9 @@ ENDM
 
 reset_TMR0 macro
     BANKSEL TMR0
-    movlw 240
+    movlw 186
     movwf TMR0
-    bcf ((INTCON) and 07Fh), 2
+    bcf ((INTCON) and 07Fh), 2 ; Reinicio del TMR0 a 9ms
     endm
 
 reset_TMR1 macro
@@ -2492,22 +2492,22 @@ reset_TMR1 macro
     movwf TMR1H
     movlw 0xF7
     movwf TMR1L
-    bcf ((PIR1) and 07Fh), 0
+    bcf ((PIR1) and 07Fh), 0 ; Reinicio del TMR1 a 1s
     endm
 
 reset_TMR2 macro
     BANKSEL PIR1
     movlw 122
     movwf PR2
-    bcf ((PIR1) and 07Fh), 1
+    bcf ((PIR1) and 07Fh), 1 ; Reinicio del TMR2 a 250ms
     endm
 
 PSECT udata_bank0
    int_B: DS 1 ; Indicador del cambio de estado o de selección
-   T2FLAG: DS 1
+   T2FLAG: DS 1 ; Bandera para utilización del TMR2
    disp: DS 1 ; Indicador del siguiente display a multiplexar
-   sem: DS 1 ; el bit 3 enciende la luz titilante y el 4 el TMR1
-   decena: DS 1
+   sem: DS 1 ; el bit 3 enciende la luz titilante
+   decena: DS 1 ; Variable para la división
    div1: DS 1
    unidad: DS 1
    temp_1: DS 2 ; tiempo temporal a usar en el semáforo
@@ -2537,9 +2537,9 @@ PSECT intVect, class=CODE, abs, delta=2
 ORG 04h ;posición 0004h para las interrupciones
 
 push:
-    movwf W_TEMP
-    swapf STATUS, W
-    movwf STATUS_TEMP
+    movwf W_TEMP ; Push y Pop junto con la rutina de
+    swapf STATUS, W ; de interrupción para guardar STATUS
+    movwf STATUS_TEMP ; y valor de W
 
 isr:
     btfsc ((INTCON) and 07Fh), 0
@@ -2560,11 +2560,11 @@ pop:
     retfie
 
 int_iocb:
-    BANKSEL PORTB
-    btfss PORTB, 0
-    bsf int_B, 0
-    btfss PORTB, 1
-    bsf int_B, 1
+    BANKSEL PORTB ; Se verifica el pin del puerto B en el cual
+    btfss PORTB, 0 ; se realizó la interrupción y se encienden los
+    bsf int_B, 0 ; respectivos bits de la variable que determina
+    btfss PORTB, 1 ; si se cambiará de estado o si se debe aumentar
+    bsf int_B, 1 ; o disminuir el valor del display
     btfss PORTB, 2
     bsf int_B, 2
     bcf ((INTCON) and 07Fh), 0
@@ -2572,9 +2572,9 @@ int_iocb:
 
 int_tmr0:
     reset_TMR0
-    btfsc disp, 7
-    call disp7
-    ;----------------
+    btfsc disp, 7 ; En la variable se verifica cual es el display
+    call disp7 ; que se debe mostrar en el puerto C y se llama
+    ;---------------- ; al respectivo display
     btfsc disp, 6
     call disp6
     ;------------------
@@ -2602,10 +2602,10 @@ int_tmr1:
     return
 
 int_tmr2:
-    btfss sem, 0
-    goto $+10
-    btfsc T2FLAG, 0
-    goto $+4
+    btfss sem, 0 ; Se verifica cual es el semáforo que estaba en
+    goto $+10 ; verde, luego se verifica si acaba de estar
+    btfsc T2FLAG, 0 ; encendido el LED o no y se procede a apagarlo
+    goto $+4 ; /encenderlo dependiendo del estado anterior
     bsf T2FLAG, 0
     bcf PORTD, 0
     goto $+5
@@ -2674,18 +2674,18 @@ main:
 
     BANKSEL TRISA
     movlw 00h
-    movwf TRISC
+    movwf TRISC ; Todo el puerto C son outputs
     movlw 07h
     movwf TRISB ; Los 3 primeros pines son para los push
     movlw 00h
-    movwf TRISD
+    movwf TRISD ; Todo el puerto D son outputs
     movlw 00h
     movwf TRISE
     movlw 00h
-    movwf TRISA
+    movwf TRISA ; Todo el puerto A son outputs
 
     BANKSEL IOCB
-    movlw 00000111B
+    movlw 00000111B ; Los primeros 3 pines tendrán interrupción
     movwf IOCB
 
     BANKSEL OPTION_REG
@@ -2693,12 +2693,11 @@ main:
     bcf ((OPTION_REG) and 07Fh), 5
     bcf ((OPTION_REG) and 07Fh), 4
     bcf ((OPTION_REG) and 07Fh), 3
-    bsf ((OPTION_REG) and 07Fh), 2
+    bcf ((OPTION_REG) and 07Fh), 2
     bsf ((OPTION_REG) and 07Fh), 1
-    bcf ((OPTION_REG) and 07Fh), 0
+    bsf ((OPTION_REG) and 07Fh), 0
     BANKSEL TMR0
-    movlw 178 ; Valor de TMR0 para 5ms
-    movwf TMR0
+    movlw 186 ; Configuración de TMR0 con 16 de prescaler
 
     BANKSEL T1CON
     bcf ((T1CON) and 07Fh), 1
@@ -2706,8 +2705,8 @@ main:
     bsf ((T1CON) and 07Fh), 5
     bcf T1CON, 3 ;TMR1 con prescaler de 8
 
-    BANKSEL T2CON
-    movlw 0xFF
+    BANKSEL T2CON ; TMR2 configurado con 16 de prescaler y de
+    movlw 0xFF ; postscaler
     movwf T2CON
 
     BANKSEL OSCCON
@@ -2719,12 +2718,12 @@ main:
 
     BANKSEL INTCON
     bsf ((INTCON) and 07Fh), 7
-    bsf ((INTCON) and 07Fh), 3 ; Interrupciones del puerto B
-    bsf ((INTCON) and 07Fh), 5
+    bsf ((INTCON) and 07Fh), 3 ; Interrupciones del puerto B, TMR0 y
+    bsf ((INTCON) and 07Fh), 5 ; periféricos
     bsf ((INTCON) and 07Fh), 6
 
     BANKSEL PIE1
-    bsf ((PIE1) and 07Fh), 0
+    bsf ((PIE1) and 07Fh), 0 ; Interrupciones del TMR1 y 2
     bsf ((PIE1) and 07Fh), 1
 
     BANKSEL PORTA
@@ -2732,8 +2731,8 @@ main:
     clrf PORTB
     clrf PORTC
     clrf PORTD
-    movlw 0x0A
-    movwf via_1
+    movlw 0x0A ; Los semáforos iniciaran con un valor
+    movwf via_1 ; predeterminado de 10s
     movlw 0x0A
     movwf via_2
     movlw 0x0A
@@ -2752,13 +2751,13 @@ main:
     BANKSEL T1CON
     bsf T1CON, 0
     BANKSEL T2CON
-    bcf T2CON, 2
+    bcf T2CON, 2 ; Se da inicio a los TMR1 y 2
 
  ;---------------------------------------;
 
  loop:
-    call temps
-    call modo_1
+    call temps ; Loop principal que llama a los modos
+    call modo_1 ; y configuraciones
     call modo_2
     call modo_3
     call modo_4
@@ -2775,34 +2774,34 @@ main:
     return
 
  temps:
-    movlw 0x0A
-    movwf temp_1
-    movwf temp_2
+    movlw 0x0A ; La configuración del valor de los semáforos debe
+    movwf temp_1 ; ser mayor a 10s, por lo que iniciará en 10 las
+    movwf temp_2 ; opciones
     movwf temp_3
     return
 
  modo_1:
-    BANKSEL PORTB
-    bsf PORTB, 3
-    bcf PORTB, 4
+    BANKSEL PORTB ; Se activan los LEDs respectivos, se llama a la
+    bsf PORTB, 3 ; subrutina que contiene el funcionamiento del
+    bcf PORTB, 4 ; semáforo
     bcf PORTB, 5
     call values
-    btfss int_B, 0
-    goto $-2
+    btfss int_B, 0 ; Si se activa la bandera de cambio de estado se
+    goto $-2 ; regresa al loop principal
     return
 
  modo_2:
     BANKSEL PORTB
-    clrf PORTD
-    bcf PORTB, 6
+    clrf PORTD ; Se limpian los semáforos y se encienden los LEDs
+    bcf PORTB, 6 ; respectivos del estado
     bcf PORTB, 3
     bsf PORTB, 4
     bcf PORTB, 5
-    bcf int_B, 0
-    btfsc int_B, 1
-    incf temp_1
-    btfsc int_B, 2
-    decf temp_1
+    bcf int_B, 0 ; Se verifica si se encienden las banderas para
+    btfsc int_B, 1 ; aumentar o disminuir el valor de la variable
+    incf temp_1 ; temporal y, mediante comparaciones se verifica
+    btfsc int_B, 2 ; que la variable nunca sea menor a 10 ni menor
+    decf temp_1 ; a 20
     movf temp_1, 0
     sublw 9
     btfss STATUS, 0
@@ -2815,19 +2814,19 @@ main:
     goto $+3
     movlw 10
     movwf temp_1
-    movf temp_1, 0
-    movwf cont_01
-    bcf int_B, 1
+    movf temp_1, 0 ; Se mueve el valor de la variable temporal al
+    movwf cont_01 ; display para visualizarlo y se verifica la bandera
+    bcf int_B, 1 ; para el cambio de estado.
     bcf int_B, 2
     btfss int_B, 0
     goto modo_2
     return
 
  modo_3:
-    BANKSEL PORTB
-    bsf PORTB, 3
-    bsf PORTB, 4
-    bcf PORTB, 5
+    BANKSEL PORTB ; Se encienden los LEDs respectivos del modo y se
+    bsf PORTB, 3 ; repite el mismo procedimiento que en el modo 2 y
+    bsf PORTB, 4 ; en el modo 4, solo variando las variables
+    bcf PORTB, 5 ; temporales
     bcf int_B, 0
     btfsc int_B, 1
     incf temp_2
@@ -2884,37 +2883,37 @@ main:
     return
 
  modo_5:
-    BANKSEL PORTB
-    bsf PORTB, 3
+    BANKSEL PORTB ; Se verifica si se oprimió el boton de aceptar o
+    bsf PORTB, 3 ; cancelar
     bcf PORTB, 4
     bsf PORTB, 5
     bcf int_B, 0
     btfss int_B, 1
     goto $+8
-    movf temp_1, 0
-    movwf via_1
-    movf temp_2, 0
+    movf temp_1, 0 ; Si se oprime la opción de aceptar, se mueven los
+    movwf via_1 ; valores de las variables temporales a los valores
+    movf temp_2, 0 ; que tendran los semáforos
     movwf via_2
     movf temp_3, 0
     movwf via_3
     goto $+6
     btfss int_B, 2
     goto $-10
-    clrf temp_1
-    clrf temp_2
+    clrf temp_1 ; Si se oprime la opción de cancelar simplemente se
+    clrf temp_2 ; limpian las variables temporales
     clrf temp_3
     return
 
  modo_R:
-    btfss ((PIR1) and 07Fh), 0
-    goto $-1
-    clrf PORTC
-    movlw 0xFF
+    btfss ((PIR1) and 07Fh), 0 ; Una vez se aceptan o cancelan los cambios,
+    goto $-1 ; durante un segundo se encienden todos los
+    movlw 0xFF ; semáforos y se apagan los displays
     movwf PORTD
     bsf PORTB, 6
+    clrf PORTC
     btfss ((PIR1) and 07Fh), 0
-    goto $-1
-    clrf PORTD
+    goto $-2
+    clrf PORTD ; Posteriormente se regresa al loop
     bcf PORTB, 6
     return
 
@@ -2922,24 +2921,24 @@ main:
  values:
     ;--VIA 1 EN VERDE------
     BANKSEL T2CON
-    bcf T2CON, 2
-    movlw 10000001B
-    movwf PORTD
+    bcf T2CON, 2 ; Se desactiva el TMR2 para que no titile el LED
+    movlw 10000001B ; Inicialmente se encienden los semáforos
+    movwf PORTD ; respectivos
     bsf PORTB, 6
     movf via_1, 0
     movwf cont_45
-    movf via_1, 0
-    addwf via_2, 0
+    movf via_1, 0 ; Se les asigna a los otros dos semáforos el tiempo
+    addwf via_2, 0 ; que deberán estar en rojo
     movwf cont_67
-    movlw 6
-    subwf via_1, 0
+    movlw 6 ; Se le resta 6 al contador (3 de titilante y 3 de
+    subwf via_1, 0 ; amarillo)
     movwf cont_23
-    movf cont_23, 0
+    movf cont_23, 0 ; Se mueve el valor inicial al contador
     sublw 0
     btfss STATUS, 0
-    goto $-3
-    movlw 00001001B
-    movwf sem
+    goto $-3 ; Se verifica que el semáforo haya llegado a 0
+    movlw 00001001B ; para ponerse en titilante y se activan la bandera
+    movwf sem ; y el TMR2 para titilar
     BANKSEL T2CON
     bsf T2CON, 2
     btfsc int_B, 0
@@ -2949,26 +2948,26 @@ main:
     movf cont_23, 0
     sublw 0
     btfss STATUS, 0
-    goto $-3
-    BANKSEL T2CON
+    goto $-3 ; Se vuelve a verificar que llegue a 0 para ponerse
+    BANKSEL T2CON ; en amarillo y se apaga el TMR2
     bcf T2CON, 2
     btfsc int_B, 0
     goto modo_2
     movlw 10001000B
     movwf PORTD
-    movlw 3
-    movwf cont_23
-    movf cont_23, 0
+    movlw 3 ; Se verifica de nuevo que llegue a 0 para pasar
+    movwf cont_23 ; a la rutina en que se pone en verde el siguiente
+    movf cont_23, 0 ; semáforo
     sublw 0
     btfss STATUS, 0
     goto $-3
-    btfsc int_B, 0
-    goto modo_2
+    btfsc int_B, 0 ; En todos los tramos de la subrutina hay un bit
+    goto modo_2 ; test para pasar al estado 2 en caso se seleccione
     ;-----VIA 2 EN VERDE--------
-    BANKSEL T2CON
+    BANKSEL T2CON ; Un cambio de modo a mitad del funcionamiento
     bcf T2CON, 2
-    movlw 01000010B
-    movwf PORTD
+    movlw 01000010B ; Se repite el mismo procedimiento con los otros
+    movwf PORTD ; dos semáforos
     bsf PORTB, 6
     movf via_2, 0
     movwf cont_67
@@ -3048,30 +3047,15 @@ main:
     goto $-3
     return
 
- division:
-    clrf unidad
-    clrf decena
-    movf cont_01, 0
-    movwf div1
-    movlw 10
-    incf decena
-    subwf div1, 1
-    btfsc STATUS, 0
-    goto $-3
-    decf decena
-    movf div1, 0
-    movwf unidad
-    return
-
  disp0:
     clrf decena
     movf cont_01, 0
     movwf div1
-    movlw 10
-    incf decena
-    subwf div1, 1
-    btfsc STATUS, 0
-    goto $-3
+    movlw 10 ; Se le resta 10 al valor del contador y la
+    incf decena ; cantidad de veces que se resta 10 hasta
+    subwf div1, 1 ; llegar a las unidades se mostrará en el otro
+    btfsc STATUS, 0 ; display (la decena) y el residuo será la
+    goto $-3 ; unidad
     decf decena
     addwf div1, 1
     movf div1, 0
@@ -3104,7 +3088,7 @@ disp1:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf decena, 0 ; swap para usar los otros bits
+    movf decena, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3130,7 +3114,7 @@ disp2:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf unidad, 0 ; swap para usar los otros bits
+    movf unidad, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3156,7 +3140,7 @@ disp3:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf decena, 0 ; swap para usar los otros bits
+    movf decena, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3182,7 +3166,7 @@ disp4:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf unidad, 0 ; swap para usar los otros bits
+    movf unidad, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3208,7 +3192,7 @@ disp5:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf decena, 0 ; swap para usar los otros bits
+    movf decena, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3234,7 +3218,7 @@ disp6:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf unidad, 0 ; swap para usar los otros bits
+    movf unidad, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3260,7 +3244,7 @@ disp7:
     movwf unidad
     BANKSEL PORTC
     clrf PORTC
-    movf decena, 0 ; swap para usar los otros bits
+    movf decena, 0
     andlw 00001111B
     call tabla_
     BANKSEL PORTC
@@ -3273,9 +3257,9 @@ disp7:
 
 inc_var:
     reset_TMR1
-    decf cont_23
-    decf cont_45
-    decf cont_67
+    decf cont_23 ; Rutina donde se decrementa el valor de los
+    decf cont_45 ; contadores durante cada interrupción del
+    decf cont_67 ; TMR1
     return
 
 
