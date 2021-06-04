@@ -28,8 +28,8 @@
 int reg1, reg2, n, modo, cejas, ojos, boca, LED0, LED1;
 char word[]= "lol";
 
-void my_delay(n){
-    while(n--){
+void my_delay(n){                       //Función de delay para valores
+    while(n--){                         //variables
         __delay_us(1);
     }
 }
@@ -44,11 +44,11 @@ void UART_write(unsigned char* word){   //Función que transmite datos
 }
 
 void EEPROM_write(int data, int address){
-    EEADR = address;
-    EEDAT = data;
-    EECON1bits.EEPGD = 0;
-    EECON1bits.WREN = 1;
-    INTCONbits.GIE = 0;
+    EEADR = address;                    //Rutina para guardar datos, en
+    EEDAT = data;                   //la EEPROM recibiendo la dirección
+    EECON1bits.EEPGD = 0;           //y el dato, siguiendo l rutina para
+    EECON1bits.WREN = 1;            //asegurar la escritura y apagando las
+    INTCONbits.GIE = 0;             //interrupciones
     EECON2 = 0x55;
     EECON2 = 0xAA;
     EECON1bits.WR = 1;
@@ -59,17 +59,17 @@ void EEPROM_write(int data, int address){
 }
 
 int EEPROM_read(int address){
-    EEADR = address;
-    EECON1bits.EEPGD = 0;
+    EEADR = address;            //Rutina que recibe la dirección de la
+    EECON1bits.EEPGD = 0;       //EEPROM para leer y regresar
     EECON1bits.RD = 1;
     return EEDAT;
 }
 
 void __interrupt()isr(void){
     if(T0IF){
-        PORTCbits.RC0 = 1;
-        my_delay(100+ojos*100/256);
-        PORTCbits.RC0 = 0;
+        PORTCbits.RC0 = 1;      //Bit banging enciendo manualmente
+        my_delay(100+ojos*100/256);//los pines con un tiempo mínimo de
+        PORTCbits.RC0 = 0;//1ms y máximo de 2ms dependiendo del registro
         PORTCbits.RC3 = 1;
         my_delay(100+cejas*100/256);
         PORTCbits.RC3 = 0;
@@ -83,8 +83,8 @@ void __interrupt()isr(void){
         T0IF = 0;
     }
     if (RBIF){
-        if(RB1==0){
-            modo = 1;
+        if(RB1==0){             //Los push de los pines 1 y 2 cambiaban
+            modo = 1;           //el modo para leer o guardar en la EEPROM
         }
         else if(RB2==0){
             if (modo==0){
@@ -94,8 +94,8 @@ void __interrupt()isr(void){
                 modo = 0;
             }
         }
-        else if(RB3 == 0){
-            if(modo == 0){
+        else if(RB3 == 0){  //El pin 3 tenía el push del joystick que abría
+            if(modo == 0){//o cerraba la boca
                 boca = 128;
             }
         }
@@ -108,15 +108,15 @@ void __interrupt()isr(void){
     }
     if(RCIF){
         if(RCREG=='1'){
-            PORTDbits.RD0=~PORTDbits.RD0;
-            LED0 = !LED0;
+            PORTDbits.RD0=~PORTDbits.RD0;   //La consola controlaba el encendido
+            LED0 = !LED0;               //y apagado de los ojos con 1 y 2
         }
         else if(RCREG=='2'){
             PORTDbits.RD1=~PORTDbits.RD1;
             LED1 = !LED1;
         }
-        else if(RCREG=='0'){
-            if(modo==3){
+        else if(RCREG=='0'){            //con 0 se entra al modo de control con 
+            if(modo==3){                //el teclado
                 PORTDbits.RD4 = 0;
                 modo = 1;
             }
@@ -125,8 +125,8 @@ void __interrupt()isr(void){
                 modo = 3;
             }  
         }
-        else if((RCREG=='w') && (modo==3)){
-                ojos=255;
+        else if((RCREG=='w') && (modo==3)){//las teclas controlan los motores
+                ojos=255;                   //solo estando en el modo 3
         }
         else if((RCREG=='s') && (modo==3)){
                 ojos=0;
@@ -146,9 +146,9 @@ void __interrupt()isr(void){
     }
     if (ADIF){
         if(ADCON0bits.CHS == 2){
-            CCPR1L = (ADRESH>>1);
+            CCPR1L = (ADRESH>>1);       //Canal 2 controla el PWM del DC
         }
-        else if((ADCON0bits.CHS == 1) && (modo==0)){
+        else if((ADCON0bits.CHS == 1) && (modo==0)){ //Canal 1 y 2 ojos y cejas
             cejas = ADRESH;
         }
         else if((ADCON0bits.CHS == 0) && (modo == 0)){
@@ -247,12 +247,12 @@ void main(void) {
     
     while(1){
         UART_write("Presione 1 o 2 para controlar los LEDs \r \0");
-        __delay_ms(50);
+        __delay_ms(50);//Mensaje inicial a la consola
         UART_write("O presione 0 para controlar los motores \r \0"); 
         
         while(modo==0){
-            if(ADCON0bits.GO == 0){
-                if(ADCON0bits.CHS == 0){
+            if(ADCON0bits.GO == 0){         //Cambio constante de canal
+                if(ADCON0bits.CHS == 0){    //solo en el modo 0
                     ADCON0bits.CHS = 1;
                 }
                 else if(ADCON0bits.CHS == 1){
@@ -267,9 +267,9 @@ void main(void) {
         }
         
         
-        if(modo == 1){
-            PORTDbits.RD2 = 1;
-            EEPROM_write(0x00, cejas);
+        if(modo == 1){                  //Modo 1 llama a la rutina para
+            PORTDbits.RD2 = 1;          //escribir a la EEPROM guardando
+            EEPROM_write(0x00, cejas);  //las posiciones de los motores
             EEPROM_write(0x01, ojos);
             EEPROM_write(0x02, boca);
             EEPROM_write(0x03, LED0);
@@ -280,9 +280,9 @@ void main(void) {
         }
         if(modo==2){
             PORTDbits.RD3 = 1;
-            cejas = EEPROM_read(0x00);
-            ojos = EEPROM_read(0x01);
-            boca = EEPROM_read(0x02);
+            cejas = EEPROM_read(0x00);          //Modo 2 llama los valores
+            ojos = EEPROM_read(0x01);           //guardados y se queda ahí
+            boca = EEPROM_read(0x02);           //hasta que con el push se cambie
             PORTDbits.RD0 = EEPROM_read(0x03);
             PORTDbits.RD1 = EEPROM_read(0x04);
             while(modo==2);
@@ -292,8 +292,8 @@ void main(void) {
         
         if(modo==3){
             UART_write("Presione wasd para controlar motores \r \0");
-            while(modo==3);
-        }
+            while(modo==3); //Entra al modo 3, da el mensaje y lo demas funciona
+        }                   //con interrupciones
     }
 }
 
