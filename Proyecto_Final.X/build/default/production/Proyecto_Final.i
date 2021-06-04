@@ -2517,11 +2517,21 @@ extern __bank0 __bit __timeout;
 
 
 int reg1, reg2, n, modo, cejas, ojos, boca, LED0, LED1;
+char word[]= "lol";
 
 void my_delay(n){
     while(n--){
         _delay((unsigned long)((1)*(8000000/4000000.0)));
     }
+}
+
+void UART_write(unsigned char* word){
+    while (*word != 0){
+        TXREG = (*word);
+        while(!TXSTAbits.TRMT);
+        word++;
+    }
+    return;
 }
 
 void EEPROM_write(int data, int address){
@@ -2689,7 +2699,7 @@ void main(void) {
     TXSTAbits.SYNC = 0;
     RCSTAbits.SPEN = 1;
     TXSTAbits.TX9 = 0;
-    TXSTAbits.TXEN = 0;
+    TXSTAbits.TXEN = 1;
 
     RCSTAbits.RX9 = 0;
     RCSTAbits.CREN = 1;
@@ -2725,7 +2735,12 @@ void main(void) {
     ADCON0bits.GO = 1;
     modo = 0;
 
+
     while(1){
+        UART_write("Presione 1 o 2 para controlar los LEDs \r \0");
+        _delay((unsigned long)((50)*(8000000/4000.0)));
+        UART_write("O presione 0 para controlar los motores \r \0");
+
         while(modo==0){
             if(ADCON0bits.GO == 0){
                 if(ADCON0bits.CHS == 0){
@@ -2766,8 +2781,9 @@ void main(void) {
 
         }
 
-        while(modo==3){
-
+        if(modo==3){
+            UART_write("Presione wasd para controlar motores \r \0");
+            while(modo==3);
         }
     }
 }

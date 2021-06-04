@@ -26,11 +26,21 @@
 #include <xc.h>
 
 int reg1, reg2, n, modo, cejas, ojos, boca, LED0, LED1;
+char word[]= "lol";
 
 void my_delay(n){
     while(n--){
         __delay_us(1);
     }
+}
+
+void UART_write(unsigned char* word){   //Función que transmite datos
+    while (*word != 0){                 //Verifica que el puntero aumente
+        TXREG = (*word);                //Envía el caracter que toca de la cadena
+        while(!TXSTAbits.TRMT);         //Espera a que se haya enviado el dato
+        word++;                         //Aumenta el apuntador para ir al
+    }                                   //siguente caracter
+    return;
 }
 
 void EEPROM_write(int data, int address){
@@ -198,7 +208,7 @@ void main(void) {
     TXSTAbits.SYNC = 0;         //Comunicación asíncrona
     RCSTAbits.SPEN = 1;
     TXSTAbits.TX9 = 0;          //Solo de 8 bits
-    TXSTAbits.TXEN = 0;
+    TXSTAbits.TXEN = 1;
     
     RCSTAbits.RX9 = 0;
     RCSTAbits.CREN = 1;
@@ -233,8 +243,13 @@ void main(void) {
     PIR1bits.RCIF = 0;
     ADCON0bits.GO = 1;
     modo = 0;
+      
     
     while(1){
+        UART_write("Presione 1 o 2 para controlar los LEDs \r \0");
+        __delay_ms(50);
+        UART_write("O presione 0 para controlar los motores \r \0"); 
+        
         while(modo==0){
             if(ADCON0bits.GO == 0){
                 if(ADCON0bits.CHS == 0){
@@ -275,8 +290,9 @@ void main(void) {
             
         }
         
-        while(modo==3){
-            
+        if(modo==3){
+            UART_write("Presione wasd para controlar motores \r \0");
+            while(modo==3);
         }
     }
 }

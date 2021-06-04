@@ -16,13 +16,13 @@
 
 #pragma config FOSC = INTRC_NOCLKOUT
 #pragma config WDTE = OFF
-#pragma config PWRTE = ON
-#pragma config MCLRE = OFF
+#pragma config PWRTE = OFF
+#pragma config MCLRE = ON
 #pragma config CP = OFF
 #pragma config CPD = OFF
-#pragma config BOREN = OFF
-#pragma config IESO = OFF
-#pragma config FCMEN = OFF
+#pragma config BOREN = ON
+#pragma config IESO = ON
+#pragma config FCMEN = ON
 #pragma config LVP = ON
 
 
@@ -2516,13 +2516,22 @@ extern __bank0 __bit __timeout;
 # 26 "Proyecto_Final.c" 2
 
 
-int reg1, reg2, n, modo, cejas, ojos, boca;
-int ser1, ser2, ser3 = 50;
+int reg1, reg2, n, modo, cejas, ojos, boca, LED0, LED1;
+char word[]= "lol";
 
 void my_delay(n){
     while(n--){
         _delay((unsigned long)((1)*(8000000/4000000.0)));
     }
+}
+
+void UART_write(unsigned char* word){
+    while (*word != 0){
+        TXREG = (*word);
+        while(!TXSTAbits.TRMT);
+        word++;
+    }
+    return;
 }
 
 void EEPROM_write(int data, int address){
@@ -2549,25 +2558,19 @@ int EEPROM_read(int address){
 
 void __attribute__((picinterrupt((""))))isr(void){
     if(T0IF){
-        if(ser1<=16380){
-            ser1++;
-            if(ser1>=(1000+ojos*1000/256)){
-                RC0 = 0;
-            }
-            if(ser1==((cejas*1000)/256)+1000){
-                RC3 = 0;
-            }
-            if(ser1==((boca*1000)/256)+1000){
-                RC5 = 0;
-            }
-        }
-        else{
-            RC0 = 1;
-            RC3 = 1;
-            RC5 = 1;
-            ser1 = 0;
-        }
-        TMR0 = 255;
+        PORTCbits.RC0 = 1;
+        my_delay(100+ojos*100/256);
+        PORTCbits.RC0 = 0;
+        PORTCbits.RC3 = 1;
+        my_delay(100+cejas*100/256);
+        PORTCbits.RC3 = 0;
+        PORTCbits.RC4 = 1;
+        my_delay(100+cejas*100/256);
+        PORTCbits.RC4 = 0;
+        PORTCbits.RC5 = 1;
+        my_delay(100+boca*100/256);
+        PORTCbits.RC5 = 0;
+        TMR0 = 225;
         T0IF = 0;
     }
     if (RBIF){
@@ -2583,29 +2586,63 @@ void __attribute__((picinterrupt((""))))isr(void){
             }
         }
         else if(RB3 == 0){
-            boca = 128;
+            if(modo == 0){
+                boca = 128;
+            }
         }
         else if(RB3 == 1){
-            boca = 0;
+            if(modo == 0){
+                boca = 0;
+            }
         }
         RBIF = 0;
     }
     if(RCIF){
         if(RCREG=='1'){
             PORTDbits.RD0=~PORTDbits.RD0;
+            LED0 = !LED0;
         }
         else if(RCREG=='2'){
             PORTDbits.RD1=~PORTDbits.RD1;
+            LED1 = !LED1;
+        }
+        else if(RCREG=='0'){
+            if(modo==3){
+                PORTDbits.RD4 = 0;
+                modo = 1;
+            }
+            else if(modo!=3){
+                PORTDbits.RD4 = 1;
+                modo = 3;
+            }
+        }
+        else if((RCREG=='w') && (modo==3)){
+                ojos=255;
+        }
+        else if((RCREG=='s') && (modo==3)){
+                ojos=0;
+        }
+        else if((RCREG=='a') && (modo==3)){
+                cejas=255;
+        }
+        else if((RCREG=='d') && (modo==3)){
+                cejas=0;
+        }
+        else if((RCREG==32) && (modo==3) && (boca==128)){
+                boca=0;
+        }
+        else if((RCREG==32) && (modo==3) && (boca==0)){
+                boca=128;
         }
     }
     if (ADIF){
         if(ADCON0bits.CHS == 2){
             CCPR1L = (ADRESH>>1);
         }
-        else if(ADCON0bits.CHS == 1){
+        else if((ADCON0bits.CHS == 1) && (modo==0)){
             cejas = ADRESH;
         }
-        else if(ADCON0bits.CHS == 0){
+        else if((ADCON0bits.CHS == 0) && (modo == 0)){
 
 
             ojos = ADRESH;
@@ -2631,6 +2668,8 @@ void main(void) {
     TRISD = 0x00;
 
     PORTD = 0B00000011;
+    LED0 = 1;
+    LED1 = 1;
 
     IOCBbits.IOCB = 0B00001110;
 
@@ -2642,8 +2681,8 @@ void main(void) {
     OPTION_REGbits.T0CS = 0;
     OPTION_REGbits.T0SE = 0;
     OPTION_REGbits.PSA = 0;
-    OPTION_REGbits.PS = 0;
-    TMR0 = 255;
+    OPTION_REGbits.PS = 0B110;
+    TMR0 = 225;
 
     PIE1bits.ADIE = 1;
     PIE2bits.EEIE = 1;
@@ -2694,6 +2733,10 @@ void main(void) {
     PIR1bits.TXIF = 0;
     PIR1bits.RCIF = 0;
     ADCON0bits.GO = 1;
+    modo = 0;
+    UART_write("Presione 1 o 2 para controlar los LEDs \r \0");
+    _delay((unsigned long)((50)*(8000000/4000.0)));
+    UART_write("O presione 0 para controlar los motores \r \0");
 
     while(1){
         while(modo==0){
@@ -2718,6 +2761,8 @@ void main(void) {
             EEPROM_write(0x00, cejas);
             EEPROM_write(0x01, ojos);
             EEPROM_write(0x02, boca);
+            EEPROM_write(0x03, LED0);
+            EEPROM_write(0x04, LED1);
             _delay((unsigned long)((500)*(8000000/4000.0)));
             PORTDbits.RD2 = 0;
             modo = 0;
@@ -2727,9 +2772,16 @@ void main(void) {
             cejas = EEPROM_read(0x00);
             ojos = EEPROM_read(0x01);
             boca = EEPROM_read(0x02);
+            PORTDbits.RD0 = EEPROM_read(0x03);
+            PORTDbits.RD1 = EEPROM_read(0x04);
             while(modo==2);
             PORTDbits.RD3 = 0;
 
+        }
+
+        if(modo==3){
+            UART_write("Presione wasd para controlar motores \r \0");
+            while(modo==3);
         }
     }
 }
